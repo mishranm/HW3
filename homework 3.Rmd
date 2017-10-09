@@ -1,0 +1,160 @@
+---
+title: 'Homework 3: Image analysis'
+author: "Narad Mishra"
+date: "October 4, 2017"
+output: html_document
+---
+
+**1)**.In R, write a function that will accept a character string representing a nucleic acid sequence and outputs the corresponding mRNA strand. Note that the sequence may consist of both upper and lower case letters.
+
+```{r}
+dna<-function(x){
+     mRNA<-character(length(x))
+         mRNA <- ifelse(x=="A","U",
+            ifelse(x=="T","A",
+                ifelse(x=="C","G",
+                    ifelse(x=="G","C",
+                      ifelse(x=="a","u",
+                        ifelse(x=="t","a",
+                          ifelse(x=="g","c",
+                            ifelse(x=="c","g",NA))))))))
+     print(mRNA)
+} 
+
+dna(c("A","T","g","c"))
+```
+
+**2.)** In R, write a function that will accept a character string representing a nucleic acid sequence and outputs the percent of bases that are either G or C (GC content). Note that the sequence may consist of both upper and lower case letters.
+
+```{r}
+per<-function(x){
+      len1<-length(x[x=="G"])
+        len2<-length(x[x=="C"])
+            len3<-length(x[x=="g"])
+               len4<-length(x[x=="c"])
+                tot<-length(x)
+                  cgcnt<-(sum(len1,len2,len3,len4))/tot
+        return(cgcnt)
+}
+per(c("A","T","g","c","c","a","t","T"))
+
+```
+
+ * In the example above, the C-G content is 0.375.
+
+**3.)** Suppose your microarray imaging software stores your pixel level data as a 16 bit digital image.
+
+**a.** How many possible pixel values are there?
+
+ * Total possible pixel values for 16 bit digital image is (256*256) =65,536. 
+
+ * Which can also be obtained by using the formula 2^(b), where b=number of bits.
+
+**b.** What is the range of these pixel values?
+
+ * pixel values ranges from  0 to 65,535.
+ 
+**c.** How would a pixel with an intensity of 5312 be stored using 16 bits?
+
+ *  5321 when broken down to binary 0 and 1,
+ 
+ (2^15)0 + (2^14)0 + (2^13)0 + (2^12)1 + (2^11)0 + (2^10)1 + (2^9)0 + (2^8)0 + (2^7)1 + (2^6)1 + (2^5)0 + (2^4)0 + (2^3)0 + (2^2)0 + (2^1)0 + (2^0)0 
+ 
+ Therefore, 5321 is stored as _0001010011000000_ using 16 bits.
+ 
+**4.)** The PixelData.csv file contains pixel level foreground intensities for different probe sets; for this example, each probe set consists of 20 probes. The probe sets are identifiable by the field 'ProbeSet' while the probes comprising the probe sets are identifiable by the combination of the 'ProbeX' and 'ProbeY' fields (which are the coordinates of the probe on the GeneChip). Process this raw pixel data as follows:
+
+**a.** Read the PixelData.csv file into the R programming environment. 
+ 
+```{r}
+  library(data.table)
+  dat<-read.csv("PixelData.csv",header=TRUE)
+```
+  
+**b.** How many different probe sets are there in this dataset? 
+
+ ```{r, echo=FALSE}
+ levels(dat$ProbeSet)
+```
+
+ * There are **four** probe sets in the dataset.
+This can be obtained by quiring the summary of the data as well.
+ 
+ 
+**c.** Write a function that will calculate probe cell intensity using the Affymetrix method(the 75th percentile of the pixel intensities). Apply this function to obtain probe cell intensity for all probes in this dataset.
+
+```{r}
+int<-function(x){
+group<-split(dat$Intensity,list(dat$ProbeSet, dat$ProbeY, dat$ProbeX),drop=TRUE)
+z<-as.vector(sapply(group, function(x) quantile(x, .75)))
+return(z)
+}
+int(dat)
+```
+
+**d.** Write a function to calculate a trimmed mean using the exact formula. Apply this function to the dataset to obtain probe cell intensities for all probes in this dataset, using a trimming percentage of 30%.
+
+```{r}
+trimmean<-function(x){
+n<- length(x)
+alpha <- 0.3
+g <- floor((alpha) * (n))
+r <- (alpha)* (n) - g
+start_index <- g + 2
+end_index <- n - g - 1
+ z<-(1 / (n * (1 - 2 * alpha))) * ((1 - r) * sum(sort(x)[g + 1], 
+      x[n - g]) + sum(sort(x)[start_index:end_index]))
+ return(z) 
+}
+group<-split(dat$Intensity,list(dat$ProbeSet, dat$ProbeY, dat$ProbeX),drop=TRUE)
+cutmean<-as.vector(sapply(group, function(x) trimmean(x)))
+cutmean
+
+```
+
+
+**e.** Plot the log2 transformed results from part (c) on the x-axis against the log2 transformed results from part (d) on the y-axis. What do you conclude about the agreement of the two methods in this example? Investigate any problem probes if needed and discuss what attributes to any observed differences.
+
+```{r}
+Thirdquartile<-int(dat)
+plot(log2(Thirdquartile),log2(cutmean), main="Trim mean vs 75th percentile", xlab="75% percentile of Intensity", ylab="Trimmed mean of Intensity")
+```
+
+
+The two methods used to find the actual intensity are very similar in the sense their results are very close.
+
+```{r}
+model<-lm(log2(cutmean)~log2(Thirdquartile))
+residual<-sort(resid(model),decreasing = TRUE)
+residual[1:4]
+```
+The probe cell that are the outliers are located in row number 1,3,50,80 of the probe cells.
+From the plot, we can see that the 75th percentile intensities are not contributing to the outliers, its the trimmed mean intensities. This signifies, no matter how best the trimmed mean is calculated, it is likely to have some flaws to the results. Because the mean is based on sum of the values and is not based on rank of the values, it is more likely to be skewed than the statistics based on rank, eg.percentiles.
+
+
+
+**5.)** The following table consists of pixel level intensities for one spot patch area (these data are also available in hmwk3.csv). In addition, those pixels outside the mask (circle/spot) have been labeled "O" while pixels in the interior of the mask have been labeled "I". Enter all data into the R programming environment (do NOT use scan()).
+
+```{r, echo=FALSE}
+pixelint<-read.csv("hmwk3.csv")
+```
+
+For these data, use the Mann-Whitney segmentation method to identify foreground and background pixels; note the eight sampled background pixels have been identified for you in the third column. If you fail to reject H0 let the number of pixels to discard equal 2. Once you have identified foreground pixels, calculate the median intensity.
+
+```{r,echo=FALSE}
+colnames(pixelint)<-c("intensity", "interior", "background")
+a<-pixelint$intensity[which(pixelint$interior=="I")]
+x1<-sort(a)
+y<-pixelint$intensity[which(pixelint$background=="Yes")]
+x<-x1[1:8]
+```
+
+```{r}
+wilcox.test(x, y, alternative = "greater")
+x2<-x1[3:10]
+wilcox.test(x2, y, alternative = "greater")
+median(x2)
+
+```
+
+
