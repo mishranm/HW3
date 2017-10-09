@@ -67,7 +67,6 @@ per(c("A","T","g","c","c","a","t","T"))
 **a.** Read the PixelData.csv file into the R programming environment. 
  
 ```{r}
-  library(data.table)
   dat<-read.csv("PixelData.csv",header=TRUE)
 ```
   
